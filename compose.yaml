@@ -1,0 +1,96 @@
+services:
+  mysql:
+    image: mysql:8.4.9
+    container_name: trackjobs-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-trackjobs}
+      MYSQL_USER: ${MYSQL_USER:-trackjobs}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-trackjobs}
+      TZ: America/Sao_Paulo
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - dados_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+
+  migracoes:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: migracoes
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-trackjobs}
+      MYSQL_USER: ${MYSQL_USER:-trackjobs}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-trackjobs}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@trackjobs.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@123}
+      USER_EMAIL: ${USER_EMAIL:-usuario@trackjobs.local}
+      USER_PASSWORD: ${USER_PASSWORD:-Usuario@123}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: producao
+    container_name: trackjobs-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-trackjobs}
+      MYSQL_USER: ${MYSQL_USER:-trackjobs}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-trackjobs}
+      JWT_SECRET: ${JWT_SECRET:-trackjobs-chave-local-altere-em-producao}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@trackjobs.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@123}
+      USER_EMAIL: ${USER_EMAIL:-usuario@trackjobs.local}
+      USER_PASSWORD: ${USER_PASSWORD:-Usuario@123}
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    depends_on:
+      migracoes:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/saude').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: trackjobs-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  dados_mysql:

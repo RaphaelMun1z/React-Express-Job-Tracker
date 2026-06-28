@@ -1,0 +1,59 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Perfil {
+  ADMIN
+  USUARIO
+}
+
+model Usuario {
+  id            String        @id @default(uuid()) @db.VarChar(36)
+  nome          String        @db.VarChar(100)
+  email         String        @unique @db.VarChar(150)
+  senhaHash     String        @map("senha_hash") @db.VarChar(255)
+  perfil        Perfil        @default(USUARIO)
+  ativo         Boolean       @default(true)
+  criadoEm      DateTime      @default(now()) @map("criado_em")
+  atualizadoEm  DateTime      @updatedAt @map("atualizado_em")
+  candidaturas  Candidatura[]
+
+  @@map("usuarios")
+}
+
+model Candidatura {
+  id               String   @id @default(uuid()) @db.VarChar(64)
+  empresa          String   @db.VarChar(80)
+  cargo            String   @db.VarChar(100)
+  status           String   @db.VarChar(40)
+  prioridade       String   @db.VarChar(20)
+  localizacao      String   @default("") @db.VarChar(100)
+  uf               String   @default("") @db.Char(2)
+  tecnologias      Json
+  modeloTrabalho   String   @default("") @map("modelo_trabalho") @db.VarChar(30)
+  tipoContratacao  String   @default("") @map("tipo_contratacao") @db.VarChar(30)
+  origem           String   @default("") @db.VarChar(50)
+  link             String   @db.Text
+  descricao        String   @db.Text
+  salario          String   @default("") @db.VarChar(80)
+  beneficios       String   @default("") @db.VarChar(180)
+  dataCandidatura  DateTime @map("data_candidatura") @db.Date
+  criadoEm         DateTime @default(now()) @map("criado_em")
+  atualizadoEm     DateTime @updatedAt @map("atualizado_em")
+  historico        Json
+  usuarioId        String   @map("usuario_id") @db.VarChar(36)
+  usuario          Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([status])
+  @@index([prioridade])
+  @@index([dataCandidatura])
+  @@index([empresa])
+  @@map("candidaturas")
+}
